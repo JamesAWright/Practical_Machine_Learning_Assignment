@@ -1,0 +1,102 @@
+---
+title: "Practical Machine Learning Final Assignment"
+author: "James Wright"
+date: "December 2017"
+output: html_document
+---
+
+# Introduction
+
+## Background
+
+Advances in technology and interest in personal health have led to the popularisation of devices such as Jawbone Up, Nike FuelBand, and Fitbit, and it is now possible to collect a large amount of data about personal activity relatively inexpensively. 
+
+These type of devices are part of the quantified self movement - a group of enthusiasts who take measurements about themselves regularly to improve their health, to find patterns in their behavior, or because they are tech geeks. One thing that people regularly do is quantify how much of a particular activity they do, but they rarely quantify how well they do it. 
+
+The goal of this project was to use data from accelerometers on the belt, forearm, arm, and dumbell of 6 participants who were asked to perform weight lifts correctly and incorrectly in 5 different ways. 
+
+More information is available from the website here: http://web.archive.org/web/20161224072740/http:/groupware.les.inf.puc-rio.br/har (see the section on the Weight Lifting Exercise Dataset).
+
+## Modelling Approach
+
+The approach was to use the training data available at https://d396qusza40orc.cloudfront.net/predmachlearn/pml-training.csv to create a training set (on which to build a classification model) and a validation set (to assess the accuracy of the model in correctly classifying the type of exercise). Cross-validating the model allows us to gain an estimate of the accuracy of the model when applied to new data (out of sample error), and if needed, tune model hyperparameters until the accuracy is acceptable. It should be noted that this could lead to overfitting, and hyperparameter tuning with the validation data should be done with caution, as the model may be less able to generalilse to new data. 
+
+The model was then applied to the test data, available from https://d396qusza40orc.cloudfront.net/predmachlearn/pml-testing.csv, to classify 20 movements as a particular activity. 
+
+Due to its versatility and robustness, a random forest classifier was chosen to perform the classification task.
+
+# Methodology
+
+## Import libraries
+
+The first step was to import the libraries required for the task:
+
+```{r warning=FALSE,message=FALSE}
+library(caret)
+library(randomForest)
+```
+
+## Read training data
+
+The following code reads in the training data csv and uses a list of features to keep for use in the model. The features chosen are all measurements (roll, pich, yaw, acceleration, magnet, gyros) taken from the belt, arm, and forearm -mounted sensors. Note: a feature selection process could have been used, however, it is not computationally expensive to include all those listed below. This selection represents 49 out of the original 160 features included in the training data csv.
+
+```{r }
+traindata = read.csv('pml-training.csv')
+
+keepcols = c("classe","roll_belt","pitch_belt","yaw_belt","gyros_belt_x","gyros_belt_y","gyros_belt_z","accel_belt_x","accel_belt_y","accel_belt_z","magnet_belt_x","magnet_belt_y","magnet_belt_z","roll_arm","pitch_arm","yaw_arm","gyros_arm_x","gyros_arm_y","gyros_arm_z","accel_arm_x","accel_arm_y","accel_arm_z","magnet_arm_x","magnet_arm_y","magnet_arm_z","roll_dumbbell","pitch_dumbbell","yaw_dumbbell","gyros_dumbbell_x","gyros_dumbbell_y","gyros_dumbbell_z","accel_dumbbell_x","accel_dumbbell_y","accel_dumbbell_z","magnet_dumbbell_x","magnet_dumbbell_y","magnet_dumbbell_z","roll_forearm","pitch_forearm","yaw_forearm","gyros_forearm_x","gyros_forearm_y","gyros_forearm_z","accel_forearm_x","accel_forearm_y","accel_forearm_z","magnet_forearm_x","magnet_forearm_y","magnet_forearm_z")
+
+traindata = traindata[,keepcols]
+```
+
+## Split into train and validation data
+
+To be able to assess the out of sample accuracy of the model we would need to test the model's classification results against labelled data. By splitting the training data above into train and validation sets (cross-validation approach) we can obtain a data set which we can train our model on and another data set to score the accuracy of the model's predictions. Because we have a relatively large number of observations (19622), we can hold out a relatively large percentage. A 70/30 split of the training data obtained above was chosen for the train and validation sets. 
+
+```{r}
+inTrain <- createDataPartition(y=traindata$classe,p=0.7,list=FALSE)
+train_set <- traindata[inTrain,]
+val_set <- traindata[-inTrain,]
+```
+
+## Build random forest classifier
+
+The classifier is built using the randomForest class from the randomForest library. The number of trees used was set initially at 100. 
+
+```{r}
+set.seed(415)
+clf <- randomForest(as.factor(classe) ~ ., data=train_set, ntree=100, 
+                    importance=TRUE)
+```
+
+## Obtain out-of-sample accuracy estimate
+
+To obtain this estimate, we simply use the model to predict the "classe" factor variable of the validation set, and then use the confusionMatrix function to see the accuracy of the classification.
+
+```{r}
+predicted <- predict(clf, val_set)
+val_res <- confusionMatrix(data = predicted, reference = val_set$classe)
+val_res$overall[1]
+
+```
+
+We can also see how the observations were classified, using the confusion matrix:
+
+```{r}
+val_res$table
+```
+
+The relatively high score of the out of sample accuracy suggests that no hyperparameter tuning is necessary, and that we can go ahead and use our model to predict the classification of the test data observations. 
+
+# Test data predictions
+
+The test data was predicted using the following code:
+
+```{r}
+testdata = read.csv('pml-testing.csv')
+
+# Make predictions
+
+predicted <- predict(clf, testdata)
+
+predicted
+```
